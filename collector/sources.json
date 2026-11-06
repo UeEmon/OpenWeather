@@ -14,7 +14,8 @@
     "alignment_offset_seconds": null,
     "provider_update_schedule": "モデルごとに異なる。APIの固定更新時刻は今回未確定。current.timeはモデルの対象時刻であり公開時刻ではない。",
     "notes": "データ再利用のCC BY 4.0と、無料APIの非商用条件は別。商用化時は有料契約・接続先の再確認が必要。",
-    "license": "CC BY 4.0 (data); free API noncommercial"
+    "license": "CC BY 4.0 (data); free API noncommercial",
+    "minimum_collection_interval_seconds": 1800
   },
   "marine": {
     "name": "Open-Meteo marine",
@@ -31,7 +32,8 @@
     "alignment_offset_seconds": null,
     "provider_update_schedule": "モデルごとに異なる。APIの固定更新時刻は今回未確定。current.timeはモデルの対象時刻であり公開時刻ではない。",
     "notes": "データ再利用のCC BY 4.0と、無料APIの非商用条件は別。商用化時は有料契約・接続先の再確認が必要。",
-    "license": "CC BY 4.0 (data); free API noncommercial"
+    "license": "CC BY 4.0 (data); free API noncommercial",
+    "minimum_collection_interval_seconds": 3600
   },
   "jma-marine-bulletins": {
     "name": "気象庁 海上図電文索引",
@@ -49,7 +51,8 @@
     "alignment_offset_seconds": 600,
     "provider_update_schedule": "長期フィードは毎時更新。公開の分は未指定。毎時10分に収集（運用上の選択）。短期フィードは毎分更新だが今回未使用。",
     "notes": "長期Atomフィードから原文のタイトル・概要・時刻・リンクを抽出。独自予報・警報の有効性判定をしない。配信遅延・停止の可能性あり。警報の本質を変える編集は禁止。",
-    "license": "PDL1.0 + JMA XML conditions"
+    "license": "PDL1.0 + JMA XML conditions",
+    "minimum_collection_interval_seconds": 3600
   },
   "jma-typhoon-bulletins": {
     "name": "気象庁 台風電文索引",
@@ -67,7 +70,8 @@
     "alignment_offset_seconds": 600,
     "provider_update_schedule": "長期フィードは毎時更新。公開の分は未指定。毎時10分に収集（運用上の選択）。短期フィードは毎分更新だが今回未使用。",
     "notes": "長期Atomフィードから原文のタイトル・概要・時刻・リンクを抽出。独自予報・警報の有効性判定をしない。配信遅延・停止の可能性あり。警報の本質を変える編集は禁止。",
-    "license": "PDL1.0 + JMA XML conditions"
+    "license": "PDL1.0 + JMA XML conditions",
+    "minimum_collection_interval_seconds": 3600
   },
   "sst-analysis": {
     "name": "NOAA OISST v2.1 Final (ERDDAP)",
@@ -84,7 +88,8 @@
     "alignment_offset_seconds": 64800,
     "provider_update_schedule": "日別の確定解析。NRT版から約2週間遅延。固定公開UTC時刻は未確認。毎日18:00 UTC収集は運用上の選択。",
     "notes": "当該データセットのlicenseに無料利用・再配布可能と明記。近リアルタイム版ではなく約2週間遅れの確定解析。現在の水温として表示しない。提供元による保証・推薦を示唆しない。",
-    "license": "Dataset-specific reuse license"
+    "license": "Dataset-specific reuse license",
+    "minimum_collection_interval_seconds": 86400
   },
   "nowphas": {
     "name": "NOWPHAS",

@@ -82,14 +82,15 @@ class CollectorTests(unittest.TestCase):
             self.assertEqual(get('/api/v1/marine?area=tokyo&area=naha')[0],400)
             self.assertEqual(get('/unknown')[0],404)
             body=json.dumps({'name':'API test','bounds':{'south':34,'west':139,'north':35,'east':140}}).encode()
-            bad=urllib.request.Request(base+'/api/v1/areas',data=body,headers={'Content-Type':'application/json','Origin':'https://evil.example'})
+            bad=urllib.request.Request(base+'/api/v1/admin/areas',data=body,headers={'Content-Type':'application/json','Origin':'https://evil.example'})
             with self.assertRaises(urllib.error.HTTPError) as caught:urllib.request.urlopen(bad)
             self.assertEqual(caught.exception.code,403)
-            req=urllib.request.Request(base+'/api/v1/areas',data=body,headers={'Content-Type':'application/json'})
+            req=urllib.request.Request(base+'/api/v1/admin/areas',data=body,headers={'Content-Type':'application/json'})
             with urllib.request.urlopen(req) as response:
                 self.assertEqual(response.status,201);area_id=json.load(response)['id']
-            self.assertIn(area_id,get('/api/v1/areas')[1])
-            with urllib.request.urlopen(urllib.request.Request(base+'/api/v1/areas/'+area_id,method='DELETE')) as response:
+            self.assertNotIn(area_id,get('/api/v1/areas')[1])
+            self.assertIn(area_id,get('/api/v1/admin/areas')[1])
+            with urllib.request.urlopen(urllib.request.Request(base+'/api/v1/admin/areas/'+area_id,method='DELETE')) as response:
                 self.assertEqual(response.status,200)
 
             for kind,area in jobs(self.store):

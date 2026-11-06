@@ -84,3 +84,31 @@ class WindowTests(unittest.TestCase):
             self.assertEqual(len(result['hourly']['wave_height']),count)
             self.assertEqual(result['_window']['data_type'],'model_estimate_not_observation')
         self.assertEqual(len(data['hourly']['time']),96)
+
+
+class PublicSettingsTests(unittest.TestCase):
+    def test_points_store_only_coordinates_and_expire(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            store=Store(Path(tmp)/'db')
+            p=store.ensure_point({'latitude':35.001,'longitude':139.4})
+            self.assertEqual(store.ensure_point({'latitude':35.002,'longitude':139.4})['id'],p['id'])
+            self.assertEqual(store.areas()[p['id']]['name'],'Temporary data point')
+            self.assertNotIn('bounds',store.areas()[p['id']])
+            with self.assertRaises(ValueError):store.ensure_point({'latitude':35,'longitude':139,'name':'private'})
+            with store.connect() as db:db.execute('UPDATE points SET expires=0')
+            store.prune_points()
+            self.assertNotIn(p['id'],store.areas())
+
+    def test_admin_settings_cannot_enable_uncleared_source(self):
+        import copy
+        original=copy.deepcopy(SOURCES)
+        try:
+            with tempfile.TemporaryDirectory() as tmp:
+                path=Path(tmp)/'db';store=Store(path)
+                request={'enabled':True,'collection_interval_seconds':3600,'alignment_offset_seconds':None}
+                with self.assertRaises(ValueError):store.update_settings('nowphas',request)
+                store.update_settings('weather',request)
+                self.assertEqual(Store(path).timing('weather','tokyo')['collection_interval_seconds'],3600)
+                with self.assertRaises(ValueError):store.update_settings('weather',{**request,'collection_interval_seconds':1})
+        finally:
+            SOURCES.clear();SOURCES.update(original)

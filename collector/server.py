@@ -80,11 +80,19 @@ class Store:
         Path(self.path).parent.mkdir(parents=True, exist_ok=True)
         with self.connect() as db:
             db.execute('PRAGMA journal_mode=WAL')
+            db.execute('CREATE TABLE IF NOT EXISTS points(id TEXT PRIMARY KEY, payload TEXT NOT NULL, expires REAL NOT NULL)')
+            db.execute('CREATE TABLE IF NOT EXISTS settings(kind TEXT PRIMARY KEY, payload TEXT NOT NULL)')
             db.execute('CREATE TABLE IF NOT EXISTS areas(id TEXT PRIMARY KEY, payload TEXT NOT NULL)')
             db.execute('CREATE TABLE IF NOT EXISTS schedule(kind TEXT, area TEXT, next_attempt REAL, failures INTEGER, PRIMARY KEY(kind,area))')
             if 'request_key' not in {row[1] for row in db.execute('PRAGMA table_info(schedule)')}:
                 db.execute('ALTER TABLE schedule ADD COLUMN request_key TEXT')
             db.execute('CREATE TABLE IF NOT EXISTS snapshots(kind TEXT, area TEXT, payload TEXT, fetched REAL, attempted REAL, error TEXT, PRIMARY KEY(kind,area))')
+
+        with self.connect() as db:
+            saved=list(db.execute('SELECT kind,payload FROM settings'))
+        for kind,raw in saved:
+            if kind in SOURCES and SOURCES[kind]['legal_review']=='approved_with_conditions':
+                SOURCES[kind]={**SOURCES[kind],**json.loads(raw)}
 
     def connect(self):
         return sqlite3.connect(self.path, timeout=10)
@@ -123,7 +131,49 @@ class Store:
     def areas(self):
         with self.connect() as db:
             custom = {key:json.loads(raw) for key,raw in db.execute('SELECT id,payload FROM areas')}
-        return {**AREAS,**custom}
+        with self.connect() as db:
+            points={key:json.loads(raw) for key,raw in db.execute('SELECT id,payload FROM points WHERE expires>?',(time.time(),))}
+        return {**AREAS,**custom,**points}
+
+    def ensure_point(self,data):
+        import hashlib
+        if not isinstance(data,dict) or set(data)!={'latitude','longitude'}:
+            raise ValueError('latitude and longitude only')
+        lat,lon=data['latitude'],data['longitude']
+        if any(not isinstance(v,(int,float)) or isinstance(v,bool) or not math.isfinite(v) for v in [lat,lon]) or not (-90<=lat<=90 and -180<=lon<=180):
+            raise ValueError('invalid coordinates')
+        lat,lon=round(lat,2),round(lon,2)
+        key='point_'+hashlib.sha256(f'{lat:.2f},{lon:.2f}'.encode()).hexdigest()[:16]
+        point={'name':'Temporary data point','lat':lat,'lon':lon,'cache_only':True}
+        self.prune_points()
+        with self.connect() as db:
+            db.execute('BEGIN IMMEDIATE')
+            exists=db.execute('SELECT 1 FROM points WHERE id=?',(key,)).fetchone()
+            if not exists and db.execute('SELECT count(*) FROM points').fetchone()[0]>=32:
+                raise ValueError('temporary point cache is full; try later')
+            db.execute('INSERT INTO points VALUES (?,?,?) ON CONFLICT(id) DO UPDATE SET expires=excluded.expires',(key,json.dumps(point),time.time()+43200))
+        return {'id':key,'latitude':lat,'longitude':lon,'expires_in_seconds':43200}
+
+    def prune_points(self):
+        with self.connect() as db:
+            expired=[r[0] for r in db.execute('SELECT id FROM points WHERE expires<=?',(time.time(),))]
+            for key in expired:
+                db.execute('DELETE FROM snapshots WHERE area=?',(key,))
+                db.execute('DELETE FROM schedule WHERE area=?',(key,))
+                db.execute('DELETE FROM points WHERE id=?',(key,))
+
+    def update_settings(self,kind,data):
+        if kind not in SOURCES or SOURCES[kind]['legal_review']!='approved_with_conditions':
+            raise ValueError('source has not been cleared for use')
+        if not isinstance(data,dict) or set(data)!={'enabled','collection_interval_seconds','alignment_offset_seconds'}:
+            raise ValueError('invalid schedule settings')
+        period,offset=data['collection_interval_seconds'],data['alignment_offset_seconds']
+        if not isinstance(data['enabled'],bool) or type(period) is not int or not SOURCES[kind].get('minimum_collection_interval_seconds',300)<=period<=86400 or (offset is not None and (type(offset) is not int or not 0<=offset<period)):
+            raise ValueError('interval below operational minimum or above 86400 seconds; offset must be within interval')
+        with self.connect() as db:
+            db.execute('INSERT INTO settings VALUES (?,?) ON CONFLICT(kind) DO UPDATE SET payload=excluded.payload',(kind,json.dumps(data)))
+        SOURCES[kind]={**SOURCES[kind],**data}
+        return SOURCES[kind]
 
     def add_area(self, data):
         import secrets
@@ -219,9 +269,16 @@ def make_handler(store):
             if parsed.path == '/api/v1/sources':
                 return self.reply(200,SOURCES)
             if parsed.path == '/api/v1/areas':
-                return self.reply(200, store.areas())
+                return self.reply(200, AREAS)
+            if parsed.path == '/api/v1/admin/settings':
+                return self.reply(200,SOURCES)
+            if parsed.path == '/api/v1/admin/areas':
+                return self.reply(200,store.areas())
             if parsed.path in ('/ready', '/api/v1/status'):
-                states = {kind: {area: store.read(kind,area) for k,area in jobs(store) if k==kind} for kind in {k for k,a in jobs(store)}}
+                chosen=urllib.parse.parse_qs(parsed.query).get('area',['tokyo'])[0]
+                if parsed.path=='/api/v1/status' and chosen not in store.areas():return self.reply(400,{'error':'invalid_area'})
+                pairs=jobs(store) if parsed.path=='/ready' else [(k,a) for k,a in jobs(store) if a in (chosen,'_global')]
+                states={kind:{area:store.read(kind,area) for k,area in pairs if k==kind} for kind in {k for k,a in pairs}}
                 ready = all(d and not d['_meta']['stale'] for group in states.values() for d in group.values())
                 return self.reply(200 if ready or parsed.path.endswith('/status') else 503,
                                   {'ready': ready, 'datasets': {k: {a: d['_meta'] if d else {'available': False, **store.timing(k,a)} for a, d in group.items()} for k, group in states.items()}})
@@ -250,21 +307,26 @@ def make_handler(store):
             return not origin or urllib.parse.urlsplit(origin).netloc.lower()==self.headers.get('Host','').lower()
 
         def do_POST(self):
-            if self.path!='/api/v1/areas':return self.reply(404,{'error':'not_found'})
+            allowed=self.path in ('/api/v1/points','/api/v1/admin/areas') or self.path.startswith('/api/v1/admin/schedules/')
+            if not allowed:return self.reply(404,{'error':'not_found'})
             if not self.origin_ok():return self.reply(403,{'error':'cross_origin_denied'})
             if self.headers.get('Content-Type','').split(';')[0]!='application/json':
                 return self.reply(415,{'error':'json_required'})
             try:
                 size=int(self.headers.get('Content-Length','0'))
                 if not 0<size<=4096:raise ValueError('body limit 4096')
-                key,area=store.add_area(json.loads(self.rfile.read(size)))
+                data=json.loads(self.rfile.read(size))
+                if self.path=='/api/v1/points':return self.reply(200,store.ensure_point(data))
+                if self.path.startswith('/api/v1/admin/schedules/'):
+                    return self.reply(200,store.update_settings(self.path.rsplit('/',1)[-1],data))
+                key,area=store.add_area(data)
                 return self.reply(201,{'id':key,**area})
             except (ValueError,UnicodeError) as exc:
                 return self.reply(400,{'error':str(exc)})
 
         def do_DELETE(self):
             if not self.origin_ok():return self.reply(403,{'error':'cross_origin_denied'})
-            prefix='/api/v1/areas/'
+            prefix='/api/v1/admin/areas/'
             if not self.path.startswith(prefix):return self.reply(404,{'error':'not_found'})
             removed=store.delete_area(self.path[len(prefix):])
             return self.reply(200 if removed else 404,{'deleted':removed})
@@ -293,6 +355,7 @@ def jobs(store=None):
 
 def collect_loop(store, stop):
     while not stop.is_set():
+        store.prune_points()
         due = store.due_jobs()
         if due:
             with concurrent.futures.ThreadPoolExecutor(max_workers=2) as pool:

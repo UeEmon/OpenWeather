@@ -14,6 +14,8 @@ services:
   web:
     image: caddy:2.8.4
     environment:
+      COLLECTOR_ADMIN_USER: "${COLLECTOR_ADMIN_USER:-admin}"
+      COLLECTOR_ADMIN_HASH: "${COLLECTOR_ADMIN_HASH:?Set a Caddy bcrypt hash for the collector admin screen}"
       NO_PROXY: ocean-data,localhost,127.0.0.1
       no_proxy: ocean-data,localhost,127.0.0.1
     ports:
