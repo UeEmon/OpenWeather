@@ -6,18 +6,21 @@ Open-Meteo の公開気象・海象データを利用する洋上向け日本語
 
 ```sh
 cd /workspace/OpenWeather
-python3 -m http.server 3000 --bind 0.0.0.0
+docker compose up -d --build
 ```
 
-静的サイトのため依存関係のインストールやビルドは不要。通常の静的ホスティングにも配置可能。
+ローカルの3000番ポートで、Webと共通収集APIを同時起動します。収集コンテナは外部データを取得しSQLiteへ保存します。初回取得の完了まではAPIが503を返すため、少し待って更新してください。Pythonの静的HTTPサーバー単独ではAPIがないため予報を表示できません。
+
+API仕様・各システムからの接続方法は [collector/README.md](collector/README.md) を参照してください。
 
 ## 検証
 
 ```sh
 node --test tests/weather.test.mjs
+python3 -m unittest discover -s collector/tests -v
 ```
 
-ブラウザでは海域変更、更新、通信失敗時の再試行を確認してください。API通信先 `api.open-meteo.com` と `marine-api.open-meteo.com` へのHTTPSアクセスが必要です。
+ブラウザでは海域変更、更新、通信失敗時の再試行を確認してください。収集コンテナから `api.open-meteo.com` と `marine-api.open-meteo.com` へのHTTPSアクセスが必要です。ブラウザは同一オリジンの共通APIだけに接続します。
 
 ## データ
 
@@ -25,7 +28,7 @@ node --test tests/weather.test.mjs
 
 ## この環境での検証状況
 
-ユニットテスト4件と、模擬API応答によるブラウザ操作（海象値、予報、海域変更、選択保存、モバイル幅、通信失敗・再試行）を検証。相模湾沖の実API（気象・海象）の取得も確認済み。実VMでのHTTPS配信確認は別途必要です。
+Webのテスト5件・収集APIのテスト4件と、模擬API応答によるブラウザ操作（海象値、予報、海域変更、選択保存、モバイル幅、通信失敗・再試行）を検証。相模湾沖の実API（気象・海象）の取得も確認済み。実VMでのHTTPS配信確認は別途必要です。
 
 ## Oracle Cloudへの自動反映
 

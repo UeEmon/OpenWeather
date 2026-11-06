@@ -1,0 +1,27 @@
+services:
+  ocean-data:
+    build: ./collector
+    volumes:
+      - ocean-data:/data
+    restart: unless-stopped
+    read_only: true
+    tmpfs:
+      - /tmp:size=16m
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+  web:
+    image: caddy:2.8.4
+    environment:
+      NO_PROXY: ocean-data,localhost,127.0.0.1
+      no_proxy: ocean-data,localhost,127.0.0.1
+    ports:
+      - "127.0.0.1:3000:8080"
+    volumes:
+      - .:/srv/openweather:ro
+      - ./collector/Caddyfile.dev:/etc/caddy/Caddyfile:ro
+    depends_on:
+      - ocean-data
+volumes:
+  ocean-data:

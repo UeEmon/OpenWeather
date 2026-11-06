@@ -1,0 +1,13 @@
+:8080 {
+ handle /api/* {
+  reverse_proxy ocean-data:8080
+ }
+ root * /srv/openweather
+ @assets path / /index.html /style.css /app.js /weather.mjs
+ handle @assets {
+  file_server
+ }
+ handle {
+  respond 404
+ }
+}
