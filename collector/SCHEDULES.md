@@ -19,3 +19,5 @@ SQLiteのscheduleテーブルでデータ種別×海域ごとに次回予定と�
 API `_meta` に `fetched_at`, `last_attempt_at`, `next_attempt_at`, `collection_interval_seconds`, `consecutive_failures`, `age_seconds`, `stale` を含めます。表示画面の「データの収集状況」には取得間隔・最終取得・次回取得予定・失敗を日本時間で表示します。
 
 根拠：気象庁 https://xml.kishou.go.jp/xmlpull.html 、NOAAの当該データセットのsummaryとtime_coverage_end、その他はsources.jsonの出典・確認結果を参照。
+
+GEBCO 2026は固定年次版です。全球粗格子と地点周辺格子を初回・30日ごとに取得します。原データの毎日の更新を意味しません。新版への切替には製品・再利用条件の再確認が必要です。スケジュール設定ではこのソースに30日以上・365日以下の範囲を適用します。

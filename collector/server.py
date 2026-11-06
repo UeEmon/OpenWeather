@@ -168,8 +168,8 @@ class Store:
         if not isinstance(data,dict) or set(data)!={'enabled','collection_interval_seconds','alignment_offset_seconds'}:
             raise ValueError('invalid schedule settings')
         period,offset=data['collection_interval_seconds'],data['alignment_offset_seconds']
-        if not isinstance(data['enabled'],bool) or type(period) is not int or not SOURCES[kind].get('minimum_collection_interval_seconds',300)<=period<=86400 or (offset is not None and (type(offset) is not int or not 0<=offset<period)):
-            raise ValueError('interval below operational minimum or above 86400 seconds; offset must be within interval')
+        if not isinstance(data['enabled'],bool) or type(period) is not int or not SOURCES[kind].get('minimum_collection_interval_seconds',300)<=period<=SOURCES[kind].get('maximum_collection_interval_seconds',86400) or (offset is not None and (type(offset) is not int or not 0<=offset<period)):
+            raise ValueError('interval outside this source operational limits; offset must be within interval')
         with self.connect() as db:
             db.execute('INSERT INTO settings VALUES (?,?) ON CONFLICT(kind) DO UPDATE SET payload=excluded.payload',(kind,json.dumps(data)))
         SOURCES[kind]={**SOURCES[kind],**data}

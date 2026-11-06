@@ -8,3 +8,5 @@
 
 .timeline-controls{display:flex;align-items:center;gap:14px;margin:24px 0;flex-wrap:wrap}.timeline-controls label{font-size:12px}.timeline-controls select{font:inherit;font-size:13px;border:1px solid #c9d8d5;padding:12px;border-radius:7px;background:#fffefa;color:#284f50}.timeline-controls span{font-size:11px;color:#75877b}#marine-timeline-title{font-size:13px;font-weight:500;margin:20px 0 14px}
 form.area-editor label{display:flex;flex-direction:column;gap:7px}form.area-editor label:first-child{flex-direction:row;align-items:center}.area-editor input[type=checkbox]{min-width:0;width:auto;flex:0}.area-editor input[type=number]{max-width:230px}#admin-message{font-size:13px;color:#315f52;line-height:1.8}
+
+.depth-legend{display:flex;gap:9px;align-items:center;max-width:360px;font-size:10px;color:#617e81;margin:10px 0}.depth-legend i{height:9px;flex:1;border-radius:5px;background:linear-gradient(90deg,#7dcedc,#00205b)}.gis-controls select{font:inherit;font-size:11px;padding:4px;border:1px solid #c7d7d3;border-radius:5px;color:#284f50;background:#fffefa}

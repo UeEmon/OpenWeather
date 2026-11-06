@@ -6,9 +6,10 @@ from pathlib import Path
 import urllib.parse
 import urllib.request
 import xml.etree.ElementTree as ET
+import bathymetry
 
 SOURCES = json.loads((Path(__file__).parent / 'sources.json').read_text())
-GLOBAL_KINDS = {'jma-marine-bulletins', 'jma-typhoon-bulletins'}
+GLOBAL_KINDS = {'jma-marine-bulletins', 'jma-typhoon-bulletins', 'bathymetry-base'}
 JMA = 'https://www.data.jma.go.jp/developer/xml/feed/'
 ERDDAP = 'https://coastwatch.pfeg.noaa.gov/erddap/griddap/ncdcOisst21Agg_LonPM180.json'
 NS = '{http://www.w3.org/2005/Atom}'
@@ -30,6 +31,7 @@ def next_due(kind, now):
 
 
 def source_url(kind, area=None):
+    if kind in bathymetry.KINDS:return bathymetry.url(kind,area)
     if kind in GLOBAL_KINDS:
         return JMA + ('regular_l.xml' if kind == 'jma-marine-bulletins' else 'extra_l.xml')
     return ERDDAP + '?' + urllib.parse.quote(f"sst[(last)][(0.0)][({area['lat']})][({area['lon']})]", safe='[]().')
@@ -77,6 +79,7 @@ def parse_feed(raw, kind):
 def fetch_additional(kind, area):
     if not enabled(kind):
         raise ValueError('source not approved')
+    if kind in bathymetry.KINDS:return bathymetry.fetch(kind,area)
     raw = request_bytes(source_url(kind,area), 20*1024*1024 if kind in GLOBAL_KINDS else 65536)
     if kind in GLOBAL_KINDS:
         return parse_feed(raw,kind)

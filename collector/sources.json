@@ -1,4 +1,42 @@
 {
+  "bathymetry-base": {
+    "name": "GEBCO 2026 全球粗格子",
+    "enabled": true,
+    "legal_review": "approved_with_conditions",
+    "reviewed_on": "2026-11-07",
+    "terms_urls": [
+      "https://www.gebco.net/data-products/gridded-bathymetry/terms-of-use",
+      "https://www.gebco.net/data-products-gridded-bathymetry-data/gebco2026-grid"
+    ],
+    "attribution": "GEBCO Bathymetric Compilation Group 2026 (2026), GEBCO_2026 Grid. doi:10.5285/4f68d5c7-45eb-f999-e063-7086abc036fa. 海日和が間引き・補間して表示。",
+    "license": "Public domain with attribution and GEBCO conditions",
+    "commercial_use": "allowed_with_conditions",
+    "collection_interval_seconds": 2592000,
+    "minimum_collection_interval_seconds": 2592000,
+    "maximum_collection_interval_seconds": 31536000,
+    "alignment_offset_seconds": null,
+    "provider_update_schedule": "GEBCO_2026は年次版の固定データ。初回と30日ごとに部分集合を再取得。新版への自動切替はしない。",
+    "notes": "GEBCOは商用・加工・再配布を許可。出典を明示し、公式の推薦を示唆しない。平均海面基準だが浅海の一部は基準が異なる。航海や海上安全には使わない。全球は2度、地点周辺は30秒に間引いた表示用格子。"
+  },
+  "bathymetry": {
+    "name": "GEBCO 2026 地点周辺格子",
+    "enabled": true,
+    "legal_review": "approved_with_conditions",
+    "reviewed_on": "2026-11-07",
+    "terms_urls": [
+      "https://www.gebco.net/data-products/gridded-bathymetry/terms-of-use",
+      "https://www.gebco.net/data-products-gridded-bathymetry-data/gebco2026-grid"
+    ],
+    "attribution": "GEBCO Bathymetric Compilation Group 2026 (2026), GEBCO_2026 Grid. doi:10.5285/4f68d5c7-45eb-f999-e063-7086abc036fa. 海日和が間引き・補間して表示。",
+    "license": "Public domain with attribution and GEBCO conditions",
+    "commercial_use": "allowed_with_conditions",
+    "collection_interval_seconds": 2592000,
+    "minimum_collection_interval_seconds": 2592000,
+    "maximum_collection_interval_seconds": 31536000,
+    "alignment_offset_seconds": null,
+    "provider_update_schedule": "GEBCO_2026は年次版の固定データ。初回と30日ごとに部分集合を再取得。新版への自動切替はしない。",
+    "notes": "GEBCOは商用・加工・再配布を許可。出典を明示し、公式の推薦を示唆しない。平均海面基準だが浅海の一部は基準が異なる。航海や海上安全には使わない。全球は2度、地点周辺は30秒に間引いた表示用格子。"
+  },
   "weather": {
     "name": "Open-Meteo weather",
     "enabled": true,
