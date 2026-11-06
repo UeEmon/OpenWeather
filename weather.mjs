@@ -15,3 +15,9 @@ export function describe(code,day=true){
 }
 export function forecastURL(city){return apiURL('weather',city);}
 export function validate(data){if(!data?.current||!Number.isFinite(data.current.temperature_2m)||!Array.isArray(data.hourly?.time)||data.hourly.time.length<24||!Array.isArray(data.daily?.time)||data.daily.time.length!==7)throw Error('予報データの形式が正しくありません。');return data;}
+
+export function hourlyIndices(times,mode,now=Date.now()){
+ const history=mode==='history',start=history?now-12*3600000:now,end=history?now:now+Number(mode)*3600000;
+ if(!history&&!['24','36'].includes(mode))throw Error('Unknown time window');
+ return times.flatMap((t,i)=>{const when=Date.parse(t+'+09:00');return (history?when>=start&&when<=end:when>start&&when<=end)?[i]:[];});
+}

@@ -12,7 +12,7 @@ import urllib.request
 from unittest.mock import patch
 from http.server import ThreadingHTTPServer
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from server import Store, AREAS, PROVIDERS, make_handler, validate, upstream_url
+from server import Store, AREAS, PROVIDERS, make_handler, validate, upstream_url, jobs
 
 
 def fixture(kind):
@@ -61,6 +61,7 @@ class CollectorTests(unittest.TestCase):
 
     def test_provider_parameters(self):
         self.assertIn('wind_speed_unit=ms',upstream_url('weather',AREAS['tokyo']))
+        self.assertIn('cell_selection=sea',upstream_url('weather',AREAS['tokyo']))
         self.assertIn('forecast_days=3',upstream_url('marine',AREAS['tokyo']))
 
     def test_api_contract_and_no_request_time_fetch(self):
@@ -80,8 +81,19 @@ class CollectorTests(unittest.TestCase):
             self.assertEqual(get('/api/v1/marine?area=tokyo&url=http://evil')[0],400)
             self.assertEqual(get('/api/v1/marine?area=tokyo&area=naha')[0],400)
             self.assertEqual(get('/unknown')[0],404)
-            for kind in PROVIDERS:
-                for area in AREAS:self.store.collect(kind,area,lambda k,_:fixture(k))
+            body=json.dumps({'name':'API test','bounds':{'south':34,'west':139,'north':35,'east':140}}).encode()
+            bad=urllib.request.Request(base+'/api/v1/areas',data=body,headers={'Content-Type':'application/json','Origin':'https://evil.example'})
+            with self.assertRaises(urllib.error.HTTPError) as caught:urllib.request.urlopen(bad)
+            self.assertEqual(caught.exception.code,403)
+            req=urllib.request.Request(base+'/api/v1/areas',data=body,headers={'Content-Type':'application/json'})
+            with urllib.request.urlopen(req) as response:
+                self.assertEqual(response.status,201);area_id=json.load(response)['id']
+            self.assertIn(area_id,get('/api/v1/areas')[1])
+            with urllib.request.urlopen(urllib.request.Request(base+'/api/v1/areas/'+area_id,method='DELETE')) as response:
+                self.assertEqual(response.status,200)
+
+            for kind,area in jobs(self.store):
+                self.store.collect(kind,area,lambda k,_:fixture(k) if k in PROVIDERS else {'items':[]})
             with patch('server.fetch',side_effect=AssertionError('read must not fetch')):
                 code,data=get('/api/v1/marine?area=tokyo')
                 self.assertEqual(code,200)

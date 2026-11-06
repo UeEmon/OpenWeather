@@ -2,8 +2,9 @@
  handle /api/* {
   reverse_proxy ocean-data:8080
  }
+ header Referrer-Policy strict-origin-when-cross-origin
  root * /srv/openweather
- @assets path / /index.html /style.css /app.js /weather.mjs
+ @assets path / /index.html /style.css /app.js /weather.mjs /areas.js /gis-terrain.mjs /vendor/cesium/*
  handle @assets {
   file_server
  }

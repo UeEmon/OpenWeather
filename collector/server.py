@@ -13,6 +13,7 @@ import time
 import urllib.parse
 import urllib.request
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from additional_sources import SOURCES, GLOBAL_KINDS, enabled, interval, next_due, source_url, fetch_additional
 
 AREAS = json.loads((Path(__file__).parent / 'areas.json').read_text())
 PROVIDERS = {
@@ -20,10 +21,10 @@ PROVIDERS = {
         'current': 'temperature_2m,relative_humidity_2m,apparent_temperature,is_day,precipitation,weather_code,wind_speed_10m',
         'hourly': 'temperature_2m,precipitation_probability,weather_code,is_day',
         'daily': 'weather_code,temperature_2m_max,temperature_2m_min,sunset,precipitation_probability_max',
-        'wind_speed_unit': 'ms', 'forecast_days': '7'}),
+        'wind_speed_unit': 'ms', 'cell_selection': 'sea', 'past_hours': '12', 'forecast_days': '7'}),
     'marine': ('https://marine-api.open-meteo.com/v1/marine', {
         'current': 'wave_height,wave_direction,wave_period,sea_surface_temperature',
-        'hourly': 'wave_height,wave_direction,wave_period', 'forecast_days': '3'})}
+        'hourly': 'wave_height,wave_direction,wave_period', 'past_hours': '12', 'forecast_days': '3'})}
 
 
 def upstream_url(kind, area):
@@ -61,6 +62,10 @@ def validate(kind, data):
 
 
 def fetch(kind, area):
+    if not enabled(kind):
+        raise ValueError('source not approved')
+    if kind not in PROVIDERS:
+        return fetch_additional(kind, area)
     request = urllib.request.Request(upstream_url(kind, area), headers={'User-Agent': 'Umibiyori-Collector/1.0', 'Accept': 'application/json'})
     with urllib.request.urlopen(request, timeout=20) as response:
         raw = response.read(4 * 1024 * 1024 + 1)
@@ -75,26 +80,103 @@ class Store:
         Path(self.path).parent.mkdir(parents=True, exist_ok=True)
         with self.connect() as db:
             db.execute('PRAGMA journal_mode=WAL')
+            db.execute('CREATE TABLE IF NOT EXISTS areas(id TEXT PRIMARY KEY, payload TEXT NOT NULL)')
+            db.execute('CREATE TABLE IF NOT EXISTS schedule(kind TEXT, area TEXT, next_attempt REAL, failures INTEGER, PRIMARY KEY(kind,area))')
+            if 'request_key' not in {row[1] for row in db.execute('PRAGMA table_info(schedule)')}:
+                db.execute('ALTER TABLE schedule ADD COLUMN request_key TEXT')
             db.execute('CREATE TABLE IF NOT EXISTS snapshots(kind TEXT, area TEXT, payload TEXT, fetched REAL, attempted REAL, error TEXT, PRIMARY KEY(kind,area))')
 
     def connect(self):
         return sqlite3.connect(self.path, timeout=10)
 
     def collect(self, kind, area_id, getter=fetch):
+        if kind not in SOURCES or not enabled(kind):
+            return False
         now = time.time()
         try:
-            data = getter(kind, AREAS[area_id])
+            if not enabled(kind):
+                raise ValueError('source not approved')
+            area=self.areas().get(area_id)
+            data = dict(getter(kind, area))
+            data['_collector_request'] = upstream_url(kind,area) if kind in PROVIDERS else source_url(kind,area)
             with self.connect() as db:
                 db.execute('INSERT INTO snapshots VALUES (?,?,?,?,?,NULL) ON CONFLICT(kind,area) DO UPDATE SET payload=excluded.payload,fetched=excluded.fetched,attempted=excluded.attempted,error=NULL',
                            (kind, area_id, json.dumps(data, allow_nan=False), now, now))
+            self.save_schedule(kind, area_id, next_due(kind, time.time()), 0)
             return True
         except Exception as exc:
             # Store only the exception class; upstream URLs/credentials never enter logs/API.
-            error = type(exc).__name__
+            error = type(exc).__name__ + (':'+str(exc.code) if hasattr(exc,'code') else '')
             with self.connect() as db:
                 db.execute('INSERT INTO snapshots VALUES (?,?,NULL,NULL,?,?) ON CONFLICT(kind,area) DO UPDATE SET attempted=excluded.attempted,error=excluded.error', (kind, area_id, now, error))
+            with self.connect() as db:
+                previous = db.execute('SELECT failures FROM schedule WHERE kind=? AND area=?',(kind,area_id)).fetchone()
+            failures = (previous[0] if previous else 0) + 1
+            delay = min(interval(kind), 60 * 2 ** min(failures-1,6))
+            if hasattr(exc, 'headers'):
+                retry = exc.headers.get('Retry-After','')
+                if retry.isdigit(): delay = max(delay, min(int(retry),86400))
+            self.save_schedule(kind,area_id,time.time()+delay,failures)
             logging.warning('collection failed kind=%s area=%s error=%s', kind, area_id, error)
             return False
+
+    def areas(self):
+        with self.connect() as db:
+            custom = {key:json.loads(raw) for key,raw in db.execute('SELECT id,payload FROM areas')}
+        return {**AREAS,**custom}
+
+    def add_area(self, data):
+        import secrets
+        if not isinstance(data,dict) or set(data)!={'name','bounds'}:
+            raise ValueError('name and bounds required')
+        name=data['name']
+        bounds=data['bounds']
+        if not isinstance(name,str) or not name.strip() or len(name)>60 or not isinstance(bounds,dict) or set(bounds)!={'south','west','north','east'}:
+            raise ValueError('invalid name/bounds')
+        if not all(isinstance(v,(float,int)) and not isinstance(v,bool) and math.isfinite(v) for v in bounds.values()):
+            raise ValueError('finite coordinates required')
+        south,west,north,east=(bounds[k] for k in ['south','west','north','east'])
+        if not (-90<=south<north<=90 and -180<=west<east<=180) or east-west>180:
+            raise ValueError('bounds must be ordered and span at most 180 degrees; split dateline regions')
+        area={'name':name.strip(),'bounds':bounds,'lat':round((south+north)/2,5),'lon':round((west+east)/2,5),'custom':True,'sampling':'center_point'}
+        key='user_'+secrets.token_hex(6)
+        with self.connect() as db:
+            db.execute('BEGIN IMMEDIATE')
+            if db.execute('SELECT COUNT(*) FROM areas').fetchone()[0]>=24:
+                raise ValueError('maximum 24 custom areas')
+            db.execute('INSERT INTO areas VALUES (?,?)',(key,json.dumps(area,ensure_ascii=False)))
+        return key,area
+
+    def delete_area(self,key):
+        with self.connect() as db:
+            result=db.execute('DELETE FROM areas WHERE id=?',(key,))
+            if not result.rowcount:return False
+            db.execute('DELETE FROM snapshots WHERE area=?',(key,))
+            db.execute('DELETE FROM schedule WHERE area=?',(key,))
+        return True
+
+    def save_schedule(self, kind, area, due, failures):
+        with self.connect() as db:
+            db.execute('INSERT INTO schedule(kind,area,next_attempt,failures,request_key) VALUES (?,?,?,?,?) ON CONFLICT(kind,area) DO UPDATE SET next_attempt=excluded.next_attempt,failures=excluded.failures,request_key=excluded.request_key', (kind,area,due,failures,self.request_key(kind,area)))
+
+    def request_key(self,kind,area_id):
+        area=self.areas().get(area_id)
+        if area is None and kind not in GLOBAL_KINDS:return ''
+        url=upstream_url(kind,area) if kind in PROVIDERS else source_url(kind,area)
+        return json.dumps([url,interval(kind),SOURCES[kind]['alignment_offset_seconds']])
+
+    def due_jobs(self, now=None):
+        now = time.time() if now is None else now
+        with self.connect() as db:
+            scheduled = {(k,a): (due,key) for k,a,due,key in db.execute('SELECT kind,area,next_attempt,request_key FROM schedule')}
+        return [(k,a) for k,a in jobs(self) if (k,a) not in scheduled or scheduled[(k,a)][0]<=now or scheduled[(k,a)][1]!=self.request_key(k,a)]
+
+    def timing(self, kind, area):
+        with self.connect() as db:
+            row = db.execute('SELECT next_attempt,failures FROM schedule WHERE kind=? AND area=?',(kind,area)).fetchone()
+        return {'next_attempt_at': dt.datetime.fromtimestamp(row[0],dt.timezone.utc).isoformat() if row else None,
+                'consecutive_failures': row[1] if row else 0,
+                'collection_interval_seconds': interval(kind)}
 
     def read(self, kind, area_id):
         with self.connect() as db:
@@ -103,11 +185,29 @@ class Store:
             return None
         data = json.loads(row[0])
         age = max(0, time.time() - row[1])
-        data['_meta'] = {'provider': 'Open-Meteo', 'license': 'CC BY 4.0', 'area': area_id,
+        source = SOURCES[kind]
+        data['_meta'] = {'provider': 'Open-Meteo' if kind in PROVIDERS else source['name'], 'license': source['license'], 'attribution': source['attribution'], 'terms_urls': source['terms_urls'], 'legal_review': source['legal_review'], 'area': area_id,
                          'fetched_at': dt.datetime.fromtimestamp(row[1], dt.timezone.utc).isoformat(),
-                         'age_seconds': round(age), 'stale': age > self.max_age,
-                         'last_collection_failed': row[3] is not None, 'source_url': upstream_url(kind, AREAS[area_id])}
+                         'age_seconds': round(age), 'stale': age > max(self.max_age, interval(kind)*2),
+                         'last_collection_failed': row[3] is not None,
+                         'last_attempt_at': dt.datetime.fromtimestamp(row[2],dt.timezone.utc).isoformat(),
+                         'source_url': data.pop('_collector_request', PROVIDERS[kind][0] if kind in PROVIDERS else source_url(kind,self.areas().get(area_id))),
+                         **self.timing(kind,area_id)}
         return data
+
+
+def time_window(data, window, now=None):
+    now=dt.datetime.now(dt.timezone.utc) if now is None else now
+    history=window=='history'
+    start=now-dt.timedelta(hours=12) if history else now
+    end=now if history else now+dt.timedelta(hours=int(window))
+    times=data['hourly']['time']
+    indices=[]
+    for i,t in enumerate(times):
+        stamp=dt.datetime.fromisoformat(t).replace(tzinfo=dt.timezone(dt.timedelta(hours=9)))
+        if (start<=stamp<=end if history else start<stamp<=end):indices.append(i)
+    hourly={key:[values[i] for i in indices] for key,values in data['hourly'].items() if isinstance(values,list)}
+    return {**data,'hourly':hourly,'_window':{'applies_to':'hourly','mode':window,'start':start.isoformat(),'end':end.isoformat(),'sample_count':len(indices),'data_type':'model_estimate_not_observation','missing_samples_are_not_filled':True}}
 
 
 def make_handler(store):
@@ -116,23 +216,58 @@ def make_handler(store):
             parsed = urllib.parse.urlsplit(self.path)
             if parsed.path == '/health':
                 return self.reply(200, {'status': 'alive'})
+            if parsed.path == '/api/v1/sources':
+                return self.reply(200,SOURCES)
             if parsed.path == '/api/v1/areas':
-                return self.reply(200, AREAS)
+                return self.reply(200, store.areas())
             if parsed.path in ('/ready', '/api/v1/status'):
-                states = {kind: {area: store.read(kind, area) for area in AREAS} for kind in PROVIDERS}
+                states = {kind: {area: store.read(kind,area) for k,area in jobs(store) if k==kind} for kind in {k for k,a in jobs(store)}}
                 ready = all(d and not d['_meta']['stale'] for group in states.values() for d in group.values())
                 return self.reply(200 if ready or parsed.path.endswith('/status') else 503,
-                                  {'ready': ready, 'datasets': {k: {a: d['_meta'] if d else {'available': False} for a, d in group.items()} for k, group in states.items()}})
+                                  {'ready': ready, 'datasets': {k: {a: d['_meta'] if d else {'available': False, **store.timing(k,a)} for a, d in group.items()} for k, group in states.items()}})
             kind = parsed.path.removeprefix('/api/v1/')
-            if parsed.path not in ('/api/v1/weather', '/api/v1/marine'):
+            if parsed.path not in tuple('/api/v1/'+k for k in SOURCES if enabled(k)):
                 return self.reply(404, {'error': 'not_found'})
             query = urllib.parse.parse_qs(parsed.query, keep_blank_values=True)
-            if set(query) != {'area'} or len(query['area']) != 1 or query['area'][0] not in AREAS:
-                return self.reply(400, {'error': 'invalid_area', 'valid_areas': list(AREAS)})
+            if kind in GLOBAL_KINDS:
+                if query: return self.reply(400,{'error':'no_area_for_global_dataset'})
+                data=store.read(kind,'_global')
+                return self.reply(200,data) if data else self.reply(503,{'error':'not_collected_yet'},retry=True)
+            allowed={'area','window'} if kind in PROVIDERS else {'area'}
+            if not set(query)<=allowed or 'area' not in query or len(query['area']) != 1 or query['area'][0] not in store.areas():
+                return self.reply(400, {'error': 'invalid_area', 'valid_areas': list(store.areas())})
             data = store.read(kind, query['area'][0])
             if data is None:
                 return self.reply(503, {'error': 'not_collected_yet'}, retry=True)
+            if 'window' in query:
+                if len(query['window'])!=1 or query['window'][0] not in ('history','24','36'):
+                    return self.reply(400,{'error':'window_must_be_history_24_or_36'})
+                data=time_window(data,query['window'][0])
             return self.reply(200, data)
+
+        def origin_ok(self):
+            origin=self.headers.get('Origin')
+            return not origin or urllib.parse.urlsplit(origin).netloc.lower()==self.headers.get('Host','').lower()
+
+        def do_POST(self):
+            if self.path!='/api/v1/areas':return self.reply(404,{'error':'not_found'})
+            if not self.origin_ok():return self.reply(403,{'error':'cross_origin_denied'})
+            if self.headers.get('Content-Type','').split(';')[0]!='application/json':
+                return self.reply(415,{'error':'json_required'})
+            try:
+                size=int(self.headers.get('Content-Length','0'))
+                if not 0<size<=4096:raise ValueError('body limit 4096')
+                key,area=store.add_area(json.loads(self.rfile.read(size)))
+                return self.reply(201,{'id':key,**area})
+            except (ValueError,UnicodeError) as exc:
+                return self.reply(400,{'error':str(exc)})
+
+        def do_DELETE(self):
+            if not self.origin_ok():return self.reply(403,{'error':'cross_origin_denied'})
+            prefix='/api/v1/areas/'
+            if not self.path.startswith(prefix):return self.reply(404,{'error':'not_found'})
+            removed=store.delete_area(self.path[len(prefix):])
+            return self.reply(200 if removed else 404,{'deleted':removed})
 
         def reply(self, status, data, retry=False):
             raw = json.dumps(data, ensure_ascii=False, allow_nan=False).encode()
@@ -151,18 +286,24 @@ def make_handler(store):
     return Handler
 
 
-def collect_loop(store, stop, interval):
+def jobs(store=None):
+    return [(kind,area) for kind in SOURCES if enabled(kind)
+            for area in (['_global'] if kind in GLOBAL_KINDS else (store.areas() if store else AREAS))]
+
+
+def collect_loop(store, stop):
     while not stop.is_set():
-        with concurrent.futures.ThreadPoolExecutor(max_workers=2) as pool:
-            list(pool.map(lambda pair: store.collect(*pair), ((k, a) for k in PROVIDERS for a in AREAS)))
-        logging.info('collection cycle complete')
-        stop.wait(interval)
+        due = store.due_jobs()
+        if due:
+            with concurrent.futures.ThreadPoolExecutor(max_workers=2) as pool:
+                list(pool.map(lambda pair: store.collect(*pair), due))
+            logging.info('collection cycle complete datasets=%s',len(due))
+        stop.wait(10)
 
 
 def main():
     logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s %(message)s')
-    interval = max(300, int(os.environ.get('COLLECT_INTERVAL_SECONDS', '1800')))
-    store = Store(os.environ.get('DATA_PATH', '/data/ocean.sqlite3'), max_age=max(interval * 2, 3600))
+    store = Store(os.environ.get('DATA_PATH', '/data/ocean.sqlite3'), max_age=3600)
     stop = threading.Event()
     server = ThreadingHTTPServer(('0.0.0.0', int(os.environ.get('PORT', '8080'))), make_handler(store))
     def shutdown(*_):
@@ -170,7 +311,7 @@ def main():
         threading.Thread(target=server.shutdown, daemon=True).start()
     signal.signal(signal.SIGTERM, shutdown)
     signal.signal(signal.SIGINT, shutdown)
-    worker = threading.Thread(target=collect_loop, args=(store, stop, interval), daemon=True)
+    worker = threading.Thread(target=collect_loop, args=(store, stop), daemon=True)
     worker.start()
     try:
         server.serve_forever()

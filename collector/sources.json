@@ -1,0 +1,185 @@
+{
+  "weather": {
+    "name": "Open-Meteo weather",
+    "enabled": true,
+    "legal_review": "approved_with_conditions",
+    "reviewed_on": "2026-11-07",
+    "terms_urls": [
+      "https://github.com/open-meteo/open-meteo#readme",
+      "https://open-meteo.com/en/terms"
+    ],
+    "attribution": "Weather data by Open-Meteo / CC BY 4.0",
+    "commercial_use": "free_endpoint_noncommercial_only",
+    "collection_interval_seconds": 1800,
+    "alignment_offset_seconds": null,
+    "provider_update_schedule": "モデルごとに異なる。APIの固定更新時刻は今回未確定。current.timeはモデルの対象時刻であり公開時刻ではない。",
+    "notes": "データ再利用のCC BY 4.0と、無料APIの非商用条件は別。商用化時は有料契約・接続先の再確認が必要。",
+    "license": "CC BY 4.0 (data); free API noncommercial"
+  },
+  "marine": {
+    "name": "Open-Meteo marine",
+    "enabled": true,
+    "legal_review": "approved_with_conditions",
+    "reviewed_on": "2026-11-07",
+    "terms_urls": [
+      "https://github.com/open-meteo/open-meteo#readme",
+      "https://open-meteo.com/en/terms"
+    ],
+    "attribution": "Weather data by Open-Meteo / CC BY 4.0",
+    "commercial_use": "free_endpoint_noncommercial_only",
+    "collection_interval_seconds": 3600,
+    "alignment_offset_seconds": null,
+    "provider_update_schedule": "モデルごとに異なる。APIの固定更新時刻は今回未確定。current.timeはモデルの対象時刻であり公開時刻ではない。",
+    "notes": "データ再利用のCC BY 4.0と、無料APIの非商用条件は別。商用化時は有料契約・接続先の再確認が必要。",
+    "license": "CC BY 4.0 (data); free API noncommercial"
+  },
+  "jma-marine-bulletins": {
+    "name": "気象庁 海上図電文索引",
+    "enabled": true,
+    "legal_review": "approved_with_conditions",
+    "reviewed_on": "2026-11-07",
+    "terms_urls": [
+      "https://www.jma.go.jp/jma/kishou/info/coment.html",
+      "https://www.digital.go.jp/resources/open_data/public_data_license_v1.0",
+      "https://xml.kishou.go.jp/considerationforxml.pdf"
+    ],
+    "attribution": "出典：気象庁防災情報XML（PDL1.0）。海日和が対象電文を抽出・JSON化。編集責任：海日和。",
+    "commercial_use": "allowed_with_conditions",
+    "collection_interval_seconds": 3600,
+    "alignment_offset_seconds": 600,
+    "provider_update_schedule": "長期フィードは毎時更新。公開の分は未指定。毎時10分に収集（運用上の選択）。短期フィードは毎分更新だが今回未使用。",
+    "notes": "長期Atomフィードから原文のタイトル・概要・時刻・リンクを抽出。独自予報・警報の有効性判定をしない。配信遅延・停止の可能性あり。警報の本質を変える編集は禁止。",
+    "license": "PDL1.0 + JMA XML conditions"
+  },
+  "jma-typhoon-bulletins": {
+    "name": "気象庁 台風電文索引",
+    "enabled": true,
+    "legal_review": "approved_with_conditions",
+    "reviewed_on": "2026-11-07",
+    "terms_urls": [
+      "https://www.jma.go.jp/jma/kishou/info/coment.html",
+      "https://www.digital.go.jp/resources/open_data/public_data_license_v1.0",
+      "https://xml.kishou.go.jp/considerationforxml.pdf"
+    ],
+    "attribution": "出典：気象庁防災情報XML（PDL1.0）。海日和が対象電文を抽出・JSON化。編集責任：海日和。",
+    "commercial_use": "allowed_with_conditions",
+    "collection_interval_seconds": 3600,
+    "alignment_offset_seconds": 600,
+    "provider_update_schedule": "長期フィードは毎時更新。公開の分は未指定。毎時10分に収集（運用上の選択）。短期フィードは毎分更新だが今回未使用。",
+    "notes": "長期Atomフィードから原文のタイトル・概要・時刻・リンクを抽出。独自予報・警報の有効性判定をしない。配信遅延・停止の可能性あり。警報の本質を変える編集は禁止。",
+    "license": "PDL1.0 + JMA XML conditions"
+  },
+  "sst-analysis": {
+    "name": "NOAA OISST v2.1 Final (ERDDAP)",
+    "enabled": true,
+    "legal_review": "approved_with_conditions",
+    "reviewed_on": "2026-11-07",
+    "terms_urls": [
+      "https://coastwatch.pfeg.noaa.gov/erddap/info/ncdcOisst21Agg_LonPM180/index.json",
+      "https://coastwatch.pfeg.noaa.gov/erddap/legal.html#dataLicenses"
+    ],
+    "attribution": "Source: NOAA/NCEI OISST v2.1 Final via NOAA CoastWatch ERDDAP. Extracted by Umibiyori.",
+    "commercial_use": "allowed_by_dataset_license",
+    "collection_interval_seconds": 86400,
+    "alignment_offset_seconds": 64800,
+    "provider_update_schedule": "日別の確定解析。NRT版から約2週間遅延。固定公開UTC時刻は未確認。毎日18:00 UTC収集は運用上の選択。",
+    "notes": "当該データセットのlicenseに無料利用・再配布可能と明記。近リアルタイム版ではなく約2週間遅れの確定解析。現在の水温として表示しない。提供元による保証・推薦を示唆しない。",
+    "license": "Dataset-specific reuse license"
+  },
+  "nowphas": {
+    "name": "NOWPHAS",
+    "enabled": false,
+    "legal_review": "pending_terms_access",
+    "reviewed_on": "2026-11-07",
+    "terms_urls": [
+      "https://nowphas.mlit.go.jp/info/"
+    ],
+    "attribution": "出典：国土交通省 NOWPHAS",
+    "commercial_use": "unconfirmed",
+    "collection_interval_seconds": null,
+    "alignment_offset_seconds": null,
+    "provider_update_schedule": "リアルタイム提供は確認。データ別の数値更新間隔・固定時刻は未確認。",
+    "notes": "利用上の注意の取得が503。個別データの再配布・自動取得条件を未確認。許可を推定しない。",
+    "license": "Not yet cleared for this dataset"
+  },
+  "kaiho": {
+    "name": "海上保安庁 海洋速報",
+    "enabled": false,
+    "legal_review": "pending_dataset_review",
+    "reviewed_on": "2026-11-07",
+    "terms_urls": [
+      "https://www1.kaiho.mlit.go.jp/copyright.html"
+    ],
+    "attribution": "出典：海上保安庁海洋情報部（加工時は加工者を明記）",
+    "commercial_use": "general_terms_allow_exceptions_apply",
+    "collection_interval_seconds": null,
+    "alignment_offset_seconds": null,
+    "provider_update_schedule": "資料ごとに異なる。個別GIS配布・更新曜日を未確認。",
+    "notes": "一般条件は商用利用・加工・再配布可。第三者権利、別規約、水路業務法25条に注意。個別GISデータの権利・配信状態・スキーマ確認前は未接続。",
+    "license": "Not yet cleared for this dataset"
+  },
+  "copernicus": {
+    "name": "Copernicus Marine",
+    "enabled": false,
+    "legal_review": "pending_product_and_account",
+    "reviewed_on": "2026-11-07",
+    "terms_urls": [
+      "https://marine.copernicus.eu/user-corner/service-commitments-and-licence"
+    ],
+    "attribution": "Use product-specific Copernicus Marine acknowledgement.",
+    "commercial_use": "general_license_allows_any_purpose",
+    "collection_interval_seconds": null,
+    "alignment_offset_seconds": null,
+    "provider_update_schedule": "製品ごとに予報・NRT・再解析で異なる。製品選定前は時刻未設定。",
+    "notes": "一般ライセンス2.2で加工・再配布可。製品別クレジットとアカウント・対象製品・認証の確認が必要。",
+    "license": "Not yet cleared for this dataset"
+  },
+  "nomads": {
+    "name": "NOAA NOMADS GFS Wave",
+    "enabled": false,
+    "legal_review": "pending_product_adapter",
+    "reviewed_on": "2026-11-07",
+    "terms_urls": [
+      "https://www.weather.gov/disclaimer"
+    ],
+    "attribution": "Source: NOAA/NWS GFS Wave.",
+    "commercial_use": "public_domain_unless_otherwise_noted",
+    "collection_interval_seconds": null,
+    "alignment_offset_seconds": null,
+    "provider_update_schedule": "NOMADS一覧ではGFS Waveは6時間間隔。配信遅延を含む具体的な取得時刻は製品確認後に設定。",
+    "notes": "一般公開条件は確認。対象GRIB2製品・第三者権利表示・予報時刻・デコードを個別確認して追加。",
+    "license": "Not yet cleared for this dataset"
+  },
+  "jcope": {
+    "name": "JAMSTEC JCOPE",
+    "enabled": false,
+    "legal_review": "pending_permission_scope",
+    "reviewed_on": "2026-11-07",
+    "terms_urls": [
+      "https://www.jamstec.go.jp/jcope/"
+    ],
+    "attribution": "提供：海洋研究開発機構・アプリケーションラボ",
+    "commercial_use": "unconfirmed",
+    "collection_interval_seconds": null,
+    "alignment_offset_seconds": null,
+    "provider_update_schedule": "製品別の更新時刻・周期は未確認。",
+    "notes": "試験公開・参照時のクレジット指定は確認。生データの自動取得・再配布・商用利用の包括許諾は未確認。",
+    "license": "Not yet cleared for this dataset"
+  },
+  "jodc": {
+    "name": "JODC",
+    "enabled": false,
+    "legal_review": "pending_terms_access",
+    "reviewed_on": "2026-11-07",
+    "terms_urls": [
+      "https://www.jodc.go.jp/"
+    ],
+    "attribution": "出典：JODC（データ別条件を確認）",
+    "commercial_use": "unconfirmed",
+    "collection_interval_seconds": null,
+    "alignment_offset_seconds": null,
+    "provider_update_schedule": "データセット選定前につき未設定。",
+    "notes": "公式入口が503。データセット別利用条件と取得方法の確認待ち。",
+    "license": "Not yet cleared for this dataset"
+  }
+}
